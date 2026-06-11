@@ -117,9 +117,8 @@ predictor = StatisticalPredictor(
 for w in predictor.data.data_quality_warnings():
     st.sidebar.warning(w)
 
-tab_match, tab_ratings, tab_tourney, tab_valid = st.tabs(
-    ["🎯 Predicción de partido", "📋 Tabla de fuerzas", "🏆 Simular torneo",
-     "📈 Validación (backtest)"]
+tab_match, tab_ratings, tab_tourney = st.tabs(
+    ["🎯 Predicción de partido", "📋 Tabla de fuerzas", "🏆 Simular torneo"]
 )
 
 # ==========================================
@@ -258,86 +257,3 @@ with tab_tourney:
         fig.update_layout(template="plotly_dark", height=520,
                           xaxis_title="Probabilidad de ser campeón (%)")
         st.plotly_chart(fig, use_container_width=True)
-
-# ==========================================
-# TAB 4 · Validación fuera-de-muestra
-# ==========================================
-with tab_valid:
-    st.subheader("📈 ¿Qué tan confiables son las probabilidades?")
-    st.caption(
-        "Backtest con ventana expansiva: el modelo se entrena solo con partidos "
-        "ANTERIORES a cada fecha de corte y predice los siguientes (sin ver el "
-        "futuro). Las probabilidades se puntúan con reglas propias (RPS, Brier, "
-        "log-loss) y se comparan contra dos baselines. Menor = mejor."
-    )
-
-    @st.cache_resource
-    def cached_backtest(fifa_w_bt: float):
-        from backtest import run_backtest
-        return run_backtest(fifa_weight=fifa_w_bt)
-
-    if st.button("🔬 CORRER BACKTEST", type="primary"):
-        with st.spinner("Re-entrenando el modelo en cada corte temporal..."):
-            try:
-                bt = cached_backtest(round(fifa_w, 2))
-            except Exception as e:
-                st.error(f"No se pudo correr el backtest: {e}")
-                st.stop()
-
-        s = bt["summary"]
-        st.markdown(f"**{s['n_predicciones']} predicciones fuera-de-muestra** "
-                    f"en {s['folds']} cortes temporales.")
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("RPS 1X2 (modelo)", f"{s['rps_modelo']:.4f}",
-                  delta=f"{s['rps_uniforme'] - s['rps_modelo']:+.4f} vs azar",
-                  delta_color="normal")
-        c2.metric("Brier 1X2 (modelo)", f"{s['brier_modelo']:.4f}",
-                  delta=f"{s['brier_uniforme'] - s['brier_modelo']:+.4f} vs azar",
-                  delta_color="normal")
-        c3.metric("Acierto duro 1X2", f"{s['acierto_1x2']}%",
-                  help="Frecuencia con la que el resultado más probable fue el real. "
-                       "33% sería el azar puro en 3 salidas.")
-
-        st.markdown("---")
-        st.markdown("##### Mercados de goles")
-        g1, g2, g3 = st.columns(3)
-        g1.metric("Brier Over 2.5", f"{s['brier_over25_modelo']:.4f}",
-                  delta=f"{s['brier_over25_50pct'] - s['brier_over25_modelo']:+.4f} "
-                        "vs apostar 50% siempre",
-                  delta_color="normal")
-        g2.metric("Brier Ambos marcan", f"{s['brier_btts_modelo']:.4f}")
-        g3.metric("Goles/partido (pred vs real)",
-                  f"{s['goles_predichos_media']} / {s['goles_reales_media']}")
-
-        st.markdown("##### Curva de calibración · Over 2.5")
-        st.caption(
-            "Un modelo calibrado cae sobre la diagonal: cuando dice 60%, "
-            "acierta ~60% de esas veces. Desviaciones grandes = sobre/sub-confianza."
-        )
-        calib = bt["calibracion_over25"]
-        calib_plot = calib[calib["n"] > 0]
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines",
-                                 name="Calibración perfecta",
-                                 line=dict(dash="dash", color="#888")))
-        fig.add_trace(go.Scatter(
-            x=calib_plot["p_media"], y=calib_plot["freq_real"],
-            mode="markers+lines", name="Modelo",
-            marker=dict(size=calib_plot["n"].clip(6, 30), color="#2ca02c"),
-            text=[f"n={int(n)}" for n in calib_plot["n"]],
-        ))
-        fig.update_layout(template="plotly_dark", height=420,
-                          xaxis_title="Probabilidad pronosticada de Over 2.5",
-                          yaxis_title="Frecuencia real",
-                          xaxis=dict(range=[0, 1]), yaxis=dict(range=[0, 1]))
-        st.plotly_chart(fig, use_container_width=True)
-
-        with st.expander("Ver predicciones individuales fuera-de-muestra"):
-            det = bt["detalle"][[
-                "fecha", "equipo_a", "equipo_b", "marcador",
-                "p_win_a", "p_draw", "p_win_b", "p_over25", "over25_real",
-            ]].copy()
-            for c in ("p_win_a", "p_draw", "p_win_b", "p_over25"):
-                det[c] = (det[c] * 100).round(1)
-            st.dataframe(det, use_container_width=True, height=400)

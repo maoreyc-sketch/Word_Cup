@@ -132,7 +132,6 @@ class DataManager:
         fifa_weight: float = 0.55,
         use_fifa_prior: bool = True,
         style_shrink: float = 0.3,
-        max_date: str | None = None,
     ):
         self.database_path = database_path
         self.min_matches = min_matches
@@ -141,9 +140,6 @@ class DataManager:
         self.fifa_weight = float(fifa_weight)
         self.use_fifa_prior = bool(use_fifa_prior)
         self.style_shrink = float(style_shrink)
-        # Para backtesting: si se da max_date, el modelo se entrena SOLO con
-        # partidos hasta esa fecha (evita fugas de información del futuro).
-        self.max_date = pd.to_datetime(max_date) if max_date is not None else None
 
         self.df = self._load(database_path, sheet_name)
 
@@ -201,17 +197,6 @@ class DataManager:
         date_col = next((c for c in self.DATE_COLUMNS if c in df.columns), None)
         if date_col is not None:
             fechas = pd.to_datetime(df[date_col], errors="coerce")
-
-            # Corte temporal para backtesting: descarta partidos posteriores.
-            if self.max_date is not None:
-                mask = fechas.notna() & (fechas <= self.max_date)
-                df = df.loc[mask].reset_index(drop=True)
-                fechas = fechas.loc[mask].reset_index(drop=True)
-                if df.empty:
-                    raise ValueError(
-                        f"No quedan partidos antes de {self.max_date.date()}."
-                    )
-
             if fechas.notna().any():
                 ref = fechas.max()
                 antig = (ref - fechas).dt.days.fillna(0).clip(lower=0)
