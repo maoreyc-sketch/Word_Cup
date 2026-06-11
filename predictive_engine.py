@@ -83,7 +83,13 @@ class StatisticalPredictor:
         goal_scaling: float = 1.0,
         goal_environment: float = 1.0,
     ):
-        if isinstance(database_path, DataManager):
+        # Acepta un DataManager ya construido o una ruta de archivo.
+        # OJO: en Streamlit Cloud, st.cache_resource conserva objetos entre
+        # reruns mientras los módulos se re-importan; eso hace que isinstance
+        # falle aunque el objeto SEA un DataManager (la clase ya no es el
+        # mismo objeto en memoria). Por eso añadimos duck typing: si camina
+        # como DataManager (tiene base_lambdas), lo tratamos como tal.
+        if isinstance(database_path, DataManager) or hasattr(database_path, "base_lambdas"):
             self.data = database_path
         else:
             self.data = DataManager(database_path)

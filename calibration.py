@@ -81,7 +81,12 @@ def _bisect(fn, target, lo, hi, iters=40):
 
 def calibrate(database_path, rho_floor: float = -0.12) -> dict:
     """Estima goal_scaling y rho ajustados a los datos."""
-    dm = database_path if isinstance(database_path, DataManager) else DataManager(database_path)
+    # Mismo duck typing que predictive_engine: robusto a los reruns de
+    # Streamlit, donde isinstance puede fallar para objetos cacheados.
+    if isinstance(database_path, DataManager) or hasattr(database_path, "base_lambdas"):
+        dm = database_path
+    else:
+        dm = DataManager(database_path)
     tgt = observed_targets(dm)
 
     gamma = _bisect(
