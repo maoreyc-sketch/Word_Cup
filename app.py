@@ -36,6 +36,11 @@ CALIB_GOAL_SCALING = 1.079
 CALIB_RHO = 0.0
 
 st.title("📊 Motor de Predicción Estocástica · Mundial 2026")
+st.markdown(
+    "<p style='font-size:0.8rem; color:#9aa0a6; margin-top:-8px;'>"
+    "Created by <b>Mauricio Reyes</b></p>",
+    unsafe_allow_html=True,
+)
 st.caption("Poisson + Dixon-Coles · ratings ajustados por rival y anclados al ranking FIFA")
 st.markdown("---")
 
