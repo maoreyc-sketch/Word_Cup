@@ -28,11 +28,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# Valores calibrados a la base (clasificado vs clasificado) por calibration.py:
-# total ~2.59 goles, 0-0 ~5%. La base NO necesita inflar empates (rho≈0):
-# el rho negativo anterior (-0.12) sobreestimaba el 1-1 y lo dejaba pegado como
-# marcador modal. calibration.py los re-estima si cambias la base.
-CALIB_GOAL_SCALING = 1.079
+# Valores calibrados por calibration.py sobre la base ACTUAL (con la jornada 1
+# del Mundial incluida y ponderada x1.5). Total observado ~2.67 goles, 0-0 ~5%.
+# Re-corre calibration.py cada vez que agregues una jornada y pega los nuevos.
+CALIB_GOAL_SCALING = 1.066
 CALIB_RHO = 0.0
 
 st.title("📊 Motor de Predicción Estocástica · Mundial 2026")

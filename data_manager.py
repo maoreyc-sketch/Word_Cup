@@ -46,6 +46,9 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 DEFAULT_MATCH_WEIGHT = 1.2
 FRIENDLY_WEIGHT = 0.8
+# El Mundial pesa más que el resto: es la evidencia más pura y reciente sobre
+# el nivel real de cada equipo (rivales top, máxima intensidad, sin rotaciones).
+WORLD_CUP_WEIGHT = 1.5
 
 # Decaimiento temporal: vida media en días. Un partido de hace HALF_LIFE_DAYS
 # pesa la mitad que uno de hoy. Solo se usa si hay columna de fecha.
@@ -71,6 +74,8 @@ def _match_type_weight(tipo: str) -> float:
     t = tipo.strip().lower()
     if "amistoso" in t:
         return FRIENDLY_WEIGHT
+    if "mundial" in t and "clasif" not in t:  # Copa del Mundo, NO 'Clasif. Mundial'
+        return WORLD_CUP_WEIGHT
     return DEFAULT_MATCH_WEIGHT
 
 
