@@ -28,10 +28,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# Valores calibrados por calibration.py sobre la base ACTUAL (con la jornada 1
-# del Mundial incluida y ponderada x1.5). Total observado ~2.67 goles, 0-0 ~5%.
+# Valores calibrados por calibration.py sobre la base ACTUAL (jornadas 1 y 2 del
+# Mundial incluidas, ponderadas x1.5). Total observado ~2.68 goles, 0-0 ~6%.
 # Re-corre calibration.py cada vez que agregues una jornada y pega los nuevos.
-CALIB_GOAL_SCALING = 1.066
+CALIB_GOAL_SCALING = 1.065
 CALIB_RHO = 0.0
 
 st.title("📊 Motor de Predicción Estocástica · Mundial 2026")
@@ -219,6 +219,109 @@ with tab_ratings:
         "calidad del rival y anclado al ranking FIFA."
     )
     tbl = data_manager.ratings_table()
+
+    # ----------------------------------------------------------------
+    # Comparador cara a cara (clave para eliminatorias / Ronda de 32)
+    # ----------------------------------------------------------------
+    st.markdown("### ⚔️ Comparador cara a cara")
+    st.caption(
+        "Elige dos selecciones y compara su fuerza rubro por rubro. Ideal para "
+        "leer un cruce de eliminatoria, donde ya no hay grupos sino mano a mano."
+    )
+    ALL_TEAMS_R = sorted({t for teams in GRUPOS.values() for t in teams})
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        eq1 = st.selectbox("⚪ Equipo 1", ALL_TEAMS_R, index=0, key="cmp_eq1")
+    with cc2:
+        idx2 = 1 if len(ALL_TEAMS_R) > 1 else 0
+        eq2 = st.selectbox("⚫ Equipo 2", [e for e in ALL_TEAMS_R if e != eq1],
+                           index=0, key="cmp_eq2")
+
+    if eq1 and eq2 and eq1 != eq2:
+        c1 = data_manager.resolve_name(eq1)
+        c2 = data_manager.resolve_name(eq2)
+        r1 = tbl[tbl["Equipo"] == c1].iloc[0]
+        r2 = tbl[tbl["Equipo"] == c2].iloc[0]
+        rank1 = int(tbl.index[tbl["Equipo"] == c1][0]) + 1
+        rank2 = int(tbl.index[tbl["Equipo"] == c2][0]) + 1
+
+        # (etiqueta, columna, dirección, formato)
+        METRICS = [
+            ("Rating (fuerza total)", "Rating", "high", "{:.3f}"),
+            ("ATK · ataque", "ATK", "high", "{:.3f}"),
+            ("DEF · defensa", "DEF", "high", "{:.3f}"),
+            ("Estilo (+of / −def)", "Estilo", "neutral", "{:+.3f}"),
+            ("Goles a favor /partido", "GF_obs", "high", "{:.2f}"),
+            ("Goles en contra /partido", "GC_obs", "low", "{:.2f}"),
+            ("Vallas invictas %", "CS%", "high", "{:.0f}"),
+        ]
+        GREEN = "background:rgba(46,160,67,0.30); font-weight:600;"
+
+        def cells(v1, v2, direction):
+            s1 = s2 = ""
+            if direction == "high":
+                if v1 > v2: s1 = GREEN
+                elif v2 > v1: s2 = GREEN
+            elif direction == "low":
+                if v1 < v2: s1 = GREEN
+                elif v2 < v1: s2 = GREEN
+            return s1, s2
+
+        rows_html = []
+        for label, col, direction, fmt in METRICS:
+            v1, v2 = float(r1[col]), float(r2[col])
+            s1, s2 = cells(v1, v2, direction)
+            diff = v1 - v2
+            dtxt = f"{diff:+.2f}" if abs(diff) >= 0.01 or diff == 0 else f"{diff:+.3f}"
+            rows_html.append(
+                f"<tr><td style='padding:6px 10px;color:#9aa0a6;'>{label}</td>"
+                f"<td style='padding:6px 10px;text-align:center;{s1}'>{fmt.format(v1)}</td>"
+                f"<td style='padding:6px 10px;text-align:center;color:#777;'>{dtxt}</td>"
+                f"<td style='padding:6px 10px;text-align:center;{s2}'>{fmt.format(v2)}</td></tr>"
+            )
+        header = (
+            f"<tr><th style='text-align:left;padding:6px 10px;'>Métrica</th>"
+            f"<th style='padding:6px 10px;'>⚪ {c1}<br><span style='font-size:0.75rem;color:#888;'>#{rank1} en fuerza</span></th>"
+            f"<th style='padding:6px 10px;color:#888;font-weight:400;'>Δ (1−2)</th>"
+            f"<th style='padding:6px 10px;'>⚫ {c2}<br><span style='font-size:0.75rem;color:#888;'>#{rank2} en fuerza</span></th></tr>"
+        )
+        st.markdown(
+            f"<table style='width:100%;border-collapse:collapse;'>{header}"
+            f"{''.join(rows_html)}</table>",
+            unsafe_allow_html=True,
+        )
+        st.caption("Verde = ventaja en ese rubro. El Estilo no tiene ganador: "
+                   "describe si el equipo es más ofensivo (+) o defensivo (−).")
+
+        # Comparativa visual (ATK / DEF / Rating)
+        figc = go.Figure()
+        ejes = ["ATK", "DEF", "Rating"]
+        figc.add_trace(go.Bar(name=c1, x=ejes, y=[r1["ATK"], r1["DEF"], r1["Rating"]],
+                              marker_color="#1f77b4"))
+        figc.add_trace(go.Bar(name=c2, x=ejes, y=[r2["ATK"], r2["DEF"], r2["Rating"]],
+                              marker_color="#ff7f0e"))
+        figc.update_layout(template="plotly_dark", height=300, barmode="group",
+                           margin=dict(t=10, b=10))
+        st.plotly_chart(figc, use_container_width=True)
+
+        # Predicción del cruce en sede neutral (así se juegan las eliminatorias)
+        st.markdown("#### 🎯 Si se cruzaran (sede neutral)")
+        pcmp = predictor.predict_match(eq1, eq2, venue="neutral").as_dict()
+        pc1, pc2, pc3 = st.columns(3)
+        pc1.metric(f"Gana {c1}", f"{pcmp['prob_local']}%")
+        pc2.metric("Empate", f"{pcmp['prob_empate']}%")
+        pc3.metric(f"Gana {c2}", f"{pcmp['prob_visitante']}%")
+        st.caption(
+            f"Goles esperados (λ): {c1} = {pcmp['lambda_local']} · "
+            f"{c2} = {pcmp['lambda_visitante']} · marcador más probable "
+            f"{pcmp['marcador_exacto'][0]}-{pcmp['marcador_exacto'][1]}. "
+            "En eliminatoria, el empate se define por prórroga/penales."
+        )
+    else:
+        st.info("Selecciona dos equipos distintos para ver la comparación.")
+
+    st.markdown("---")
+    st.markdown("### 📊 Tabla completa")
     st.dataframe(tbl, use_container_width=True, height=560)
     fig = go.Figure([go.Bar(
         x=tbl["Rating"][:20][::-1], y=tbl["Equipo"][:20][::-1],
